@@ -1,0 +1,116 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\NID;
+use Illuminate\Http\Request;
+use thiagoalessio\TesseractOCR\TesseractOCR;
+
+class NidController extends Controller
+{
+    public function showForm()
+    {
+        return view('upload-nid');
+    }
+
+    public function processUpload(Request $request)
+    {
+        $request->validate([
+            'nid_image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+        ]);
+
+        $imagePath = $request->file('nid_image')->store('nid_images', 'public');
+
+        $ocr = new TesseractOCR(storage_path('app/public/' . $imagePath));
+        $text = $ocr->run();
+
+        $nidData = $this->parseNidData($text);
+
+        if (!empty($nidData['nid'])) {
+            NID::create([
+                'nid_number' => $nidData['nid'],
+                'name' => $nidData['name'] ?? null,
+                'dob' => $nidData['dob'] ?? null,
+            ]);
+        }
+
+        return view('nid-result', ['nidData' => $nidData]);
+    }
+
+
+    private function parseNidData($text)
+{
+    $data = [];
+
+    // Parse NID number
+    if (preg_match('/ID\s*(NO\:)?\s*(\d+)(?=\n|$)/i', $text, $matches)) {
+        $data['nid'] = $matches[2];
+    }
+
+    // Parse Name (captures only until a newline or the end of the line)
+    if (preg_match('/Name\s*:\s*([A-Za-z\s]+)(?=\n|$)/i', $text, $matches)) {
+        $data['name'] = trim($matches[1]);
+    }
+
+    // // Parse Father's Name (captures only until a newline or the end of the line)
+    // if (preg_match('/Father\'s\s*Name\s*:\s*([A-Za-z\s]+)(?=\n|$)/i', $text, $matches)) {
+    //     $data['fathers_name'] = trim($matches[1]);
+    // }
+
+    // // Parse Mother's Name (English or Bengali, captures until newline or end of the line)
+    // if (preg_match('/Mother\'s\s*Name\s*:\s*([A-Za-z\s\u0980-\u09FF]+)(?=\n|$)/i', $text, $matches)) {
+    //     $data['mothers_name'] = trim($matches[1]);
+    // }
+
+    // Parse Date of Birth (stops at newline or end of line)
+    if (preg_match('/Date\s*of\s*Birth\s*:\s*(\d{2}\s+[A-Za-z]{3}\s+\d{4})(?=\n|$)/i', $text, $matches)) {
+        $data['dob'] = trim($matches[1]);
+    }
+
+        /// Parse Mother's Name (English or Bengali)
+        // if (
+        //     preg_match('/Mother\'s\s*Name\s*:\s*([A-Za-z\s]+)/i', $text, $matches) ||
+        //     preg_match('/মাতা\s*:\s*([A-Za-z\s]+)/i', $text, $matches)
+        // ) {
+        //     $data['mothers_name'] = $matches[1];
+        // }
+
+        return $data;
+    }
+
+
+}
+
+
+// public function processUpload(Request $request)
+// {
+//     // Validate the uploaded image
+//     $request->validate([
+//         'nid_image' => 'required|image|mimes:jpeg,png,jpg|max:2048',
+//     ]);
+
+//     // Store the uploaded image
+//     $imagePath = $request->file('nid_image')->store('nid_images', 'public');
+
+//     // Set the path to the Tesseract executable (Update this path if necessary)
+//     $tesseractPath = 'C:\Program Files\Tesseract-OCR\tesseract.exe';
+
+//     // Run OCR using Tesseract to extract text from the image
+//     $ocr = new TesseractOCR(storage_path('app/public/' . $imagePath));
+//     // $ocr->executable($tesseractPath)->lang('eng');  
+//     $ocr->executable($tesseractPath);  // Set the path to the tesseract executable
+//     $text = $ocr->run();
+
+//     // Parse the extracted text to get the NID data
+//     $nidData = $this->parseNidData($text);
+
+//     // Save the NID data
+//     // if (!empty($nidData['nid'])) {
+//     //     NID::create([
+//     //         'nid_number' => $nidData['nid'],
+//     //         // Save other fields as needed
+//     //     ]);
+//     // }
+
+//     return view('nid-result', ['nidData' => $nidData]);
+// }
